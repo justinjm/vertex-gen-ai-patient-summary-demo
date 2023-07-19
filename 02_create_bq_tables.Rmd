@@ -1,0 +1,1154 @@
+---
+title: "Create BigQuery Tables"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+## Summary
+
+Queries to create a subset of synthetic patient data from [FHIR Synthea BigQuery Public Dataset](https://console.cloud.google.com/marketplace/product/mitre/synthea-fhir) for summurization by Vertex AI Generative AI Text. 
+
+The output is a BigQuery dataset with 8 tables and 3 views. 
+
+## List of Tables 
+
+Below is a list of tables that will be created after runnning the queries within this document.
+
+### Patients
+
+Subset of 100 patients to build remaining datasets from
+
+1. `bigquery-public-data.fhir_synthea.patient` - public dataset
+2. `fhir_synthea_patient_summary.vw_patient_narrow_flat` - view 
+3. `fhir_synthea_patient_summary.patients` - table (output)
+
+### Patient Registration
+
+1. `bigquery-public-data.fhir_synthea.patient` - public dataset
+2. `fhir_synthea_patient_summary.vw_patient_narrow_flat` - view
+3. `fhir_synthea_patient_summary.patient_visit_reason` - table (input, generated and manually uploaded) 
+3. `fhir_synthea_patient_summary.patient_registration` - table (output)
+
+### Patient History
+
+#### All patient history  
+
+1. `bigquery-public-data.fhir_synthea.condition` - public dataset
+2. `fhir_synthea_patient_summary.vw_condition_narrow_flat` - view 
+3. `fhir_synthea_patient_summary.patient_history100` - table (output)
+
+#### Previous 2 years patient history 
+
+1. `bigquery-public-data.fhir_synthea.condition` - public dataset
+2. `fhir_synthea_patient_summary.vw_condition_narrow_flat_2yrs` - view 
+3. `fhir_synthea_patient_summary.patient_history_2yrs` - table (output)
+
+### Outputs for App
+
+#### Patient Registration and History
+
+1. `fhir_synthea_patient_summary.patient_all` - table (output)
+2. `fhir_synthea_patient_summary.patient_all_2yrs` - table (output)
+
+#### Patients User Input 
+
+1. `fhir_synthea_patient_summary.patients_user_input` - table (output)
+
+
+## Setup 
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Set Constants 
+
+```{r set-constants}
+project_id <- Sys.getenv("PROJECT_ID")
+dataset_id <- "fhir_synthea_patient_summary"
+```
+
+## Load packages 
+
+```{r load-packages}
+library(glue)
+library(gargle)
+library(DBI)
+library(bigrquery)
+```
+
+
+## Authenticate with ADC 
+
+```{r auth}
+credentials_app_default(scopes="https://www.googleapis.com/auth/cloud-platform")
+
+con <- dbConnect(
+  bigquery(),
+  project = project_id,
+  billing = project_id,
+  dataset = dataset_id)
+```
+
+### Confirm connection to BQ successful
+
+```{sql connection=con, output.var="bq_test"}
+SELECT z FROM `bigquery-public-data.blackhole_database.sdss_dr7` LIMIT 10
+```
+
+```{r}
+head(`bq_test`)
+```
+
+refs  
+* https://gist.github.com/isteves/aaf339505c82762e8747faa3efb29c89
+
+## Create dataset
+
+
+```{r}
+bq_dataset <- bq_dataset(project_id, dataset_id)
+
+if (!bq_dataset_exists(bq_dataset)) {
+  print(glue("Dataset '{dataset_id}' does not exist, creating..."))
+  bq_dataset_create(bq_dataset)
+  print(glue("Dataset '{dataset_id}' created."))
+} else {
+  print(glue("Dataset '{dataset_id}' already exists."))
+}
+```
+
+## Upload data 
+
+for primary_visit_reason that could not be extracted from thje FHIR synthea dataset 
+
+```{r}
+data_raw <- read.csv("./data/patient_primary_reason.csv")
+
+data <- subset(data_raw, select = -c(name))
+
+table_id <- "patient_registration_visit_reason"
+
+### set bq table name and schema----------------------------------------------
+bq_table <- bq_table(project_id, dataset_id, table_id)
+bq_fields <- as_bq_fields(
+  list(
+    list(name = "patient_id", type = "string"),
+    list(name = "primary_reason_of_visit", type = "string")
+  )
+)
+
+### execute create table 
+# Delete the table if it exists
+if(bq_table_exists(bq_table)) {
+  print(glue("Table '{table_id}' already exists, deleting first..."))
+  bq_table_delete(bq_table)
+}
+bq_table_upload(bq_table, values = data, fields = bq_fields)
+
+```
+
+## Create tables by data type
+
+### Patients 
+
+#### 1 fhir_synthea.patient
+
+Public BQ dataset/table source
+
+#### 2 fhir_synthea_patient_summary.vw_patient_narrow_flat view 
+
+```{sql connection=con, output.var="bq_vw_patient_narrow_flat"}
+CREATE OR REPLACE VIEW `fhir_synthea_patient_summary.vw_patient_narrow_flat` AS (
+SELECT
+/*t.active AS active,
+animal_species_coding.system AS animal_species_coding_system,
+animal_species_coding.version AS animal_species_coding_version,
+animal_species_coding.code AS animal_species_coding_code,
+animal_species_coding.display AS animal_species_coding_display,
+animal_species_coding.userSelected AS animal_species_coding_userSelected,
+t.animal.species.text AS animal_species_text,
+animal_breed_coding.system AS animal_breed_coding_system,
+animal_breed_coding.version AS animal_breed_coding_version,
+animal_breed_coding.code AS animal_breed_coding_code,
+animal_breed_coding.display AS animal_breed_coding_display,
+animal_breed_coding.userSelected AS animal_breed_coding_userSelected,
+t.animal.breed.text AS animal_breed_text,
+animal_genderStatus_coding.system AS animal_genderStatus_coding_system,
+animal_genderStatus_coding.version AS animal_genderStatus_coding_version,
+animal_genderStatus_coding.code AS animal_genderStatus_coding_code,
+animal_genderStatus_coding.display AS animal_genderStatus_coding_display,
+animal_genderStatus_coding.userSelected AS animal_genderStatus_coding_userSelected,
+t.animal.genderStatus.text AS animal_genderStatus_text,
+contact_relationship_coding.system AS contact_relationship_coding_system,
+contact_relationship_coding.version AS contact_relationship_coding_version,
+contact_relationship_coding.code AS contact_relationship_coding_code,
+contact_relationship_coding.display AS contact_relationship_coding_display,
+contact_relationship_coding.userSelected AS contact_relationship_coding_userSelected,
+contact_relationship.text AS contact_relationship_text,
+contact.name.use AS contact_name_use,
+contact.name.text AS contact_name_text,
+contact.name.family AS contact_name_family,
+contact_name_given,
+contact_name_prefix,
+contact_name_suffix,
+contact.name.period.start AS contact_name_period_start,
+contact.name.period.
+END
+AS contact_name_period_end,
+contact_telecom.system AS contact_telecom_system,
+contact_telecom.value AS contact_telecom_value,
+contact_telecom.use AS contact_telecom_use,
+contact_telecom.rank AS contact_telecom_rank,
+contact_telecom.period.start AS contact_telecom_period_start,
+contact_telecom.period.
+END
+AS contact_telecom_period_end,
+contact.address.use AS contact_address_use,
+contact.address.type AS contact_address_type,
+contact.address.text AS contact_address_text,
+contact_address_line,
+contact.address.city AS contact_address_city,
+contact.address.district AS contact_address_district,
+contact.address.state AS contact_address_state,
+contact.address.postalCode AS contact_address_postalCode,
+contact.address.country AS contact_address_country,
+contact.address.period.start AS contact_address_period_start,
+contact.address.period.
+END
+AS contact_address_period_end,
+contact.gender AS contact_gender,
+contact.organization.organizationId AS contact_organization_organizationId,
+contact.organization.reference AS contact_organization_reference,
+contact.organization.identifier.use AS contact_organization_identifier_use,
+contact_organization_identifier_type_coding.system AS contact_organization_identifier_type_coding_system,
+contact_organization_identifier_type_coding.version AS contact_organization_identifier_type_coding_version,
+contact_organization_identifier_type_coding.code AS contact_organization_identifier_type_coding_code,
+contact_organization_identifier_type_coding.display AS contact_organization_identifier_type_coding_display,
+contact_organization_identifier_type_coding.userSelected AS contact_organization_identifier_type_coding_userSelected,
+contact.organization.identifier.type.text AS contact_organization_identifier_type_text,
+contact.organization.identifier.system AS contact_organization_identifier_system,
+contact.organization.identifier.value AS contact_organization_identifier_value,
+contact.organization.identifier.period.start AS contact_organization_identifier_period_start,
+contact.organization.identifier.period.
+END
+AS contact_organization_identifier_period_end,
+contact.organization.identifier.assigner.organizationId AS contact_organization_identifier_assigner_organizationId,
+contact.organization.identifier.assigner.reference AS contact_organization_identifier_assigner_reference,
+contact.organization.identifier.assigner.identifier.use AS contact_organization_identifier_assigner_identifier_use,
+contact_organization_identifier_assigner_identifier_type_coding.system AS contact_organization_identifier_assigner_identifier_type_coding_system,
+contact_organization_identifier_assigner_identifier_type_coding.version AS contact_organization_identifier_assigner_identifier_type_coding_version,
+contact_organization_identifier_assigner_identifier_type_coding.code AS contact_organization_identifier_assigner_identifier_type_coding_code,
+contact_organization_identifier_assigner_identifier_type_coding.display AS contact_organization_identifier_assigner_identifier_type_coding_display,
+contact_organization_identifier_assigner_identifier_type_coding.userSelected AS contact_organization_identifier_assigner_identifier_type_coding_userSelected,
+contact.organization.identifier.assigner.identifier.type.text AS contact_organization_identifier_assigner_identifier_type_text,
+contact.organization.identifier.assigner.identifier.system AS contact_organization_identifier_assigner_identifier_system,
+contact.organization.identifier.assigner.identifier.value AS contact_organization_identifier_assigner_identifier_value,
+contact.organization.identifier.assigner.identifier.period.start AS contact_organization_identifier_assigner_identifier_period_start,
+contact.organization.identifier.assigner.identifier.period.
+END
+AS contact_organization_identifier_assigner_identifier_period_end,
+contact.organization.identifier.assigner.identifier.assigner.organizationId AS contact_organization_identifier_assigner_identifier_assigner_organizationId,
+contact.organization.identifier.assigner.identifier.assigner.reference AS contact_organization_identifier_assigner_identifier_assigner_reference,
+contact.organization.identifier.assigner.identifier.assigner.display AS contact_organization_identifier_assigner_identifier_assigner_display,
+contact.organization.identifier.assigner.display AS contact_organization_identifier_assigner_display,
+contact.organization.display AS contact_organization_display,
+contact.period.start AS contact_period_start,
+contact.period.
+END
+AS contact_period_end,
+generalPractitioner.organizationId AS generalPractitioner_organizationId,
+generalPractitioner.practitionerId AS generalPractitioner_practitionerId,
+generalPractitioner.reference AS generalPractitioner_reference,
+generalPractitioner.identifier.use AS generalPractitioner_identifier_use,
+generalPractitioner_identifier_type_coding.system AS generalPractitioner_identifier_type_coding_system,
+generalPractitioner_identifier_type_coding.version AS generalPractitioner_identifier_type_coding_version,
+generalPractitioner_identifier_type_coding.code AS generalPractitioner_identifier_type_coding_code,
+generalPractitioner_identifier_type_coding.display AS generalPractitioner_identifier_type_coding_display,
+generalPractitioner_identifier_type_coding.userSelected AS generalPractitioner_identifier_type_coding_userSelected,
+generalPractitioner.identifier.type.text AS generalPractitioner_identifier_type_text,
+generalPractitioner.identifier.system AS generalPractitioner_identifier_system,
+generalPractitioner.identifier.value AS generalPractitioner_identifier_value,
+generalPractitioner.identifier.period.start AS generalPractitioner_identifier_period_start,
+generalPractitioner.identifier.period.
+END
+AS generalPractitioner_identifier_period_end,
+generalPractitioner.identifier.assigner.organizationId AS generalPractitioner_identifier_assigner_organizationId,
+generalPractitioner.identifier.assigner.reference AS generalPractitioner_identifier_assigner_reference,
+generalPractitioner.identifier.assigner.identifier.use AS generalPractitioner_identifier_assigner_identifier_use,
+generalPractitioner_identifier_assigner_identifier_type_coding.system AS generalPractitioner_identifier_assigner_identifier_type_coding_system,
+generalPractitioner_identifier_assigner_identifier_type_coding.version AS generalPractitioner_identifier_assigner_identifier_type_coding_version,
+generalPractitioner_identifier_assigner_identifier_type_coding.code AS generalPractitioner_identifier_assigner_identifier_type_coding_code,
+generalPractitioner_identifier_assigner_identifier_type_coding.display AS generalPractitioner_identifier_assigner_identifier_type_coding_display,
+generalPractitioner_identifier_assigner_identifier_type_coding.userSelected AS generalPractitioner_identifier_assigner_identifier_type_coding_userSelected,
+generalPractitioner.identifier.assigner.identifier.type.text AS generalPractitioner_identifier_assigner_identifier_type_text,
+generalPractitioner.identifier.assigner.identifier.system AS generalPractitioner_identifier_assigner_identifier_system,
+generalPractitioner.identifier.assigner.identifier.value AS generalPractitioner_identifier_assigner_identifier_value,
+generalPractitioner.identifier.assigner.identifier.period.start AS generalPractitioner_identifier_assigner_identifier_period_start,
+generalPractitioner.identifier.assigner.identifier.period.
+END
+AS generalPractitioner_identifier_assigner_identifier_period_end,
+generalPractitioner.identifier.assigner.identifier.assigner.organizationId AS generalPractitioner_identifier_assigner_identifier_assigner_organizationId,
+generalPractitioner.identifier.assigner.identifier.assigner.reference AS generalPractitioner_identifier_assigner_identifier_assigner_reference,
+generalPractitioner.identifier.assigner.identifier.assigner.display AS generalPractitioner_identifier_assigner_identifier_assigner_display,
+generalPractitioner.identifier.assigner.display AS generalPractitioner_identifier_assigner_display,
+generalPractitioner.display AS generalPractitioner_display,
+t.implicitRules AS implicitRules,
+t.language AS LANGUAGE,
+link.other.patientId AS link_other_patientId,
+link.other.relatedPersonId AS link_other_relatedPersonId,
+link.other.reference AS link_other_reference,
+link.other.identifier.use AS link_other_identifier_use,
+link_other_identifier_type_coding.system AS link_other_identifier_type_coding_system,
+link_other_identifier_type_coding.version AS link_other_identifier_type_coding_version,
+link_other_identifier_type_coding.code AS link_other_identifier_type_coding_code,
+link_other_identifier_type_coding.display AS link_other_identifier_type_coding_display,
+link_other_identifier_type_coding.userSelected AS link_other_identifier_type_coding_userSelected,
+link.other.identifier.type.text AS link_other_identifier_type_text,
+link.other.identifier.system AS link_other_identifier_system,
+link.other.identifier.value AS link_other_identifier_value,
+link.other.identifier.period.start AS link_other_identifier_period_start,
+link.other.identifier.period.
+END
+AS link_other_identifier_period_end,
+link.other.identifier.assigner.organizationId AS link_other_identifier_assigner_organizationId,
+link.other.identifier.assigner.reference AS link_other_identifier_assigner_reference,
+link.other.identifier.assigner.identifier.use AS link_other_identifier_assigner_identifier_use,
+link_other_identifier_assigner_identifier_type_coding.system AS link_other_identifier_assigner_identifier_type_coding_system,
+link_other_identifier_assigner_identifier_type_coding.version AS link_other_identifier_assigner_identifier_type_coding_version,
+link_other_identifier_assigner_identifier_type_coding.code AS link_other_identifier_assigner_identifier_type_coding_code,
+link_other_identifier_assigner_identifier_type_coding.display AS link_other_identifier_assigner_identifier_type_coding_display,
+link_other_identifier_assigner_identifier_type_coding.userSelected AS link_other_identifier_assigner_identifier_type_coding_userSelected,
+link.other.identifier.assigner.identifier.type.text AS link_other_identifier_assigner_identifier_type_text,
+link.other.identifier.assigner.identifier.system AS link_other_identifier_assigner_identifier_system,
+link.other.identifier.assigner.identifier.value AS link_other_identifier_assigner_identifier_value,
+link.other.identifier.assigner.identifier.period.start AS link_other_identifier_assigner_identifier_period_start,
+link.other.identifier.assigner.identifier.period.
+END
+AS link_other_identifier_assigner_identifier_period_end,
+link.other.identifier.assigner.identifier.assigner.organizationId AS link_other_identifier_assigner_identifier_assigner_organizationId,
+link.other.identifier.assigner.identifier.assigner.reference AS link_other_identifier_assigner_identifier_assigner_reference,
+link.other.identifier.assigner.identifier.assigner.display AS link_other_identifier_assigner_identifier_assigner_display,
+link.other.identifier.assigner.display AS link_other_identifier_assigner_display,
+link.other.display AS link_other_display,
+link.type AS link_type,
+t.managingOrganization.organizationId AS managingOrganization_organizationId,
+t.managingOrganization.reference AS managingOrganization_reference,
+t.managingOrganization.identifier.use AS managingOrganization_identifier_use,
+managingOrganization_identifier_type_coding.system AS managingOrganization_identifier_type_coding_system,
+managingOrganization_identifier_type_coding.version AS managingOrganization_identifier_type_coding_version,
+managingOrganization_identifier_type_coding.code AS managingOrganization_identifier_type_coding_code,
+managingOrganization_identifier_type_coding.display AS managingOrganization_identifier_type_coding_display,
+managingOrganization_identifier_type_coding.userSelected AS managingOrganization_identifier_type_coding_userSelected,
+t.managingOrganization.identifier.type.text AS managingOrganization_identifier_type_text,
+t.managingOrganization.identifier.system AS managingOrganization_identifier_system,
+t.managingOrganization.identifier.value AS managingOrganization_identifier_value,
+t.managingOrganization.identifier.period.start AS managingOrganization_identifier_period_start,
+t.managingOrganization.identifier.period.
+END
+AS managingOrganization_identifier_period_end,
+t.managingOrganization.identifier.assigner.organizationId AS managingOrganization_identifier_assigner_organizationId,
+t.managingOrganization.identifier.assigner.reference AS managingOrganization_identifier_assigner_reference,
+t.managingOrganization.identifier.assigner.identifier.use AS managingOrganization_identifier_assigner_identifier_use,
+managingOrganization_identifier_assigner_identifier_type_coding.system AS managingOrganization_identifier_assigner_identifier_type_coding_system,
+managingOrganization_identifier_assigner_identifier_type_coding.version AS managingOrganization_identifier_assigner_identifier_type_coding_version,
+managingOrganization_identifier_assigner_identifier_type_coding.code AS managingOrganization_identifier_assigner_identifier_type_coding_code,
+managingOrganization_identifier_assigner_identifier_type_coding.display AS managingOrganization_identifier_assigner_identifier_type_coding_display,
+managingOrganization_identifier_assigner_identifier_type_coding.userSelected AS managingOrganization_identifier_assigner_identifier_type_coding_userSelected,
+t.managingOrganization.identifier.assigner.identifier.type.text AS managingOrganization_identifier_assigner_identifier_type_text,
+t.managingOrganization.identifier.assigner.identifier.system AS managingOrganization_identifier_assigner_identifier_system,
+t.managingOrganization.identifier.assigner.identifier.value AS managingOrganization_identifier_assigner_identifier_value,
+t.managingOrganization.identifier.assigner.identifier.period.start AS managingOrganization_identifier_assigner_identifier_period_start,
+t.managingOrganization.identifier.assigner.identifier.period.
+END
+AS managingOrganization_identifier_assigner_identifier_period_end,
+t.managingOrganization.identifier.assigner.identifier.assigner.organizationId AS managingOrganization_identifier_assigner_identifier_assigner_organizationId,
+t.managingOrganization.identifier.assigner.identifier.assigner.reference AS managingOrganization_identifier_assigner_identifier_assigner_reference,
+t.managingOrganization.identifier.assigner.identifier.assigner.display AS managingOrganization_identifier_assigner_identifier_assigner_display,
+t.managingOrganization.identifier.assigner.display AS managingOrganization_identifier_assigner_display,
+t.managingOrganization.display AS managingOrganization_display,
+photo.contentType AS photo_contentType,
+photo.language AS photo_language,
+photo.data AS photo_data,
+photo.url AS photo_url,
+photo.size AS photo_size,
+photo.hash AS photo_hash,
+photo.title AS photo_title,
+photo.creation AS photo_creation,*/
+t.birthPlace.value.address.city AS birthPlace_value_address_city,
+t.birthPlace.value.address.country AS birthPlace_value_address_country,
+t.birthPlace.value.address.state AS birthPlace_value_address_state,
+t.disability_adjusted_life_years.value.decimal AS disability_adjusted_life_years_value_decimal,
+t.patient_mothersMaidenName.value.string AS patient_mothersMaidenName_value_string,
+t.quality_adjusted_life_years.value.decimal AS quality_adjusted_life_years_value_decimal,
+t.shr_actor_FictionalPerson_extension.value.boolean AS shr_actor_FictionalPerson_extension_value_boolean,
+t.shr_demographics_SocialSecurityNumber_extension.value.string AS shr_demographics_SocialSecurityNumber_extension_value_string,
+t.shr_entity_FathersName_extension.value.humanName.text AS shr_entity_FathersName_extension_value_humanName_text,
+t.shr_entity_Person_extension.value.reference.basicId AS shr_entity_Person_extension_value_reference_basicId,
+t.us_core_birthsex.value.code AS us_core_birthsex_value_code,
+t.us_core_ethnicity.ombCategory.value.coding.code AS us_core_ethnicity_ombCategory_value_coding_code,
+t.us_core_ethnicity.ombCategory.value.coding.display AS us_core_ethnicity_ombCategory_value_coding_display,
+t.us_core_ethnicity.ombCategory.value.coding.system AS us_core_ethnicity_ombCategory_value_coding_system,
+t.us_core_ethnicity.text.value.string AS us_core_ethnicity_text_value_string,
+t.us_core_race.ombCategory.value.coding.code AS us_core_race_ombCategory_value_coding_code,
+t.us_core_race.ombCategory.value.coding.display AS us_core_race_ombCategory_value_coding_display,
+t.us_core_race.ombCategory.value.coding.system AS us_core_race_ombCategory_value_coding_system,
+t.us_core_race.text.value.string AS us_core_race_text_value_string,
+/*address.district AS address_district,
+address.period.start AS address_period_start,
+address.period.
+END
+AS address_period_end,
+address.text AS address_text,
+address.type AS address_type,
+address.use AS address_use,*/
+address.geolocation.latitude.value.decimal AS address_geolocation_latitude_value_decimal,
+address.geolocation.longitude.value.decimal AS address_geolocation_longitude_value_decimal,
+address.city AS address_city,
+address.country AS address_country,
+address_line,
+address.postalCode AS address_postalCode,
+address.state AS address_state,
+t.birthDate AS birthDate,/*
+communication.preferred AS communication_preferred,
+communication_language_coding.userSelected AS communication_language_coding_userSelected,
+communication_language_coding.version AS communication_language_coding_version,*/
+communication_language_coding.code AS communication_language_coding_code,
+communication_language_coding.display AS communication_language_coding_display,
+communication_language_coding.system AS communication_language_coding_system,
+communication.language.text AS communication_language_text,
+t.deceased.boolean AS deceased_boolean,
+t.deceased.dateTime AS deceased_dateTime,
+t.gender AS gender,
+t.id AS id,
+/*identifier.assigner.organizationId AS identifier_assigner_organizationId,
+identifier.assigner.reference AS identifier_assigner_reference,
+identifier.assigner.identifier.use AS identifier_assigner_identifier_use,
+identifier_assigner_identifier_type_coding.system AS identifier_assigner_identifier_type_coding_system,
+identifier_assigner_identifier_type_coding.version AS identifier_assigner_identifier_type_coding_version,
+identifier_assigner_identifier_type_coding.code AS identifier_assigner_identifier_type_coding_code,
+identifier_assigner_identifier_type_coding.display AS identifier_assigner_identifier_type_coding_display,
+identifier_assigner_identifier_type_coding.userSelected AS identifier_assigner_identifier_type_coding_userSelected,
+identifier.assigner.identifier.type.text AS identifier_assigner_identifier_type_text,
+identifier.assigner.identifier.system AS identifier_assigner_identifier_system,
+identifier.assigner.identifier.value AS identifier_assigner_identifier_value,
+identifier.assigner.identifier.period.start AS identifier_assigner_identifier_period_start,
+identifier.assigner.identifier.period.
+END
+AS identifier_assigner_identifier_period_end,
+identifier.assigner.identifier.assigner.organizationId AS identifier_assigner_identifier_assigner_organizationId,
+identifier.assigner.identifier.assigner.reference AS identifier_assigner_identifier_assigner_reference,
+identifier.assigner.identifier.assigner.display AS identifier_assigner_identifier_assigner_display,
+identifier.assigner.display AS identifier_assigner_display,
+identifier.period.start AS identifier_period_start,
+identifier.period.
+END
+AS identifier_period_end,
+identifier.use AS identifier_use,
+identifier.system AS identifier_system,
+identifier_type_coding.userSelected AS identifier_type_coding_userSelected,
+identifier_type_coding.version AS identifier_type_coding_version,*/
+identifier_type_coding.code AS identifier_type_coding_code,
+identifier_type_coding.display AS identifier_type_coding_display,
+identifier_type_coding.system AS identifier_type_coding_system,
+identifier.type.text AS identifier_type_text,
+identifier.value AS identifier_value,
+maritalStatus_coding.userSelected AS maritalStatus_coding_userSelected,
+maritalStatus_coding.version AS maritalStatus_coding_version,
+maritalStatus_coding.code AS maritalStatus_coding_code,
+maritalStatus_coding.display AS maritalStatus_coding_display,
+maritalStatus_coding.system AS maritalStatus_coding_system,
+t.maritalStatus.text AS maritalStatus_text,/*
+t.meta.lastUpdated AS meta_lastUpdated,
+meta_security.system AS meta_security_system,
+meta_security.version AS meta_security_version,
+meta_security.code AS meta_security_code,
+meta_security.display AS meta_security_display,
+meta_security.userSelected AS meta_security_userSelected,
+meta_tag.system AS meta_tag_system,
+meta_tag.version AS meta_tag_version,
+meta_tag.code AS meta_tag_code,
+meta_tag.display AS meta_tag_display,
+meta_tag.userSelected AS meta_tag_userSelected,
+t.meta.versionId AS meta_versionId,
+meta_profile,*/
+t.multipleBirth.boolean AS multipleBirth_boolean,
+t.multipleBirth.integer AS multipleBirth_integer,
+name.period.start AS name_period_start,
+name.period.
+END
+AS name_period_end,
+name.text AS name_text,
+name.family AS name_family,
+name_given,
+name_prefix,
+name_suffix,
+name.use AS name_use,
+telecom.period.start AS telecom_period_start,
+telecom.period.
+END
+AS telecom_period_end,
+telecom.rank AS telecom_rank,
+telecom.system AS telecom_system,
+telecom.use AS telecom_use,
+telecom.value AS telecom_value,
+t.text.div AS text_div,
+t.text.status AS text_status
+FROM
+`bigquery-public-data.fhir_synthea.patient` AS t
+LEFT JOIN
+t.animal.species.coding AS animal_species_coding
+LEFT JOIN
+t.animal.breed.coding AS animal_breed_coding
+LEFT JOIN
+t.animal.genderStatus.coding AS animal_genderStatus_coding
+LEFT JOIN
+t.contact AS contact
+LEFT JOIN
+contact.relationship AS contact_relationship
+LEFT JOIN
+contact_relationship.coding AS contact_relationship_coding
+LEFT JOIN
+contact.name.given AS contact_name_given
+LEFT JOIN
+contact.name.prefix AS contact_name_prefix
+LEFT JOIN
+contact.name.suffix AS contact_name_suffix
+LEFT JOIN
+contact.telecom AS contact_telecom
+LEFT JOIN
+contact.address.line AS contact_address_line
+LEFT JOIN
+contact.organization.identifier.type.coding AS contact_organization_identifier_type_coding
+LEFT JOIN
+contact.organization.identifier.assigner.identifier.type.coding AS contact_organization_identifier_assigner_identifier_type_coding
+LEFT JOIN
+t.generalPractitioner AS generalPractitioner
+LEFT JOIN
+generalPractitioner.identifier.type.coding AS generalPractitioner_identifier_type_coding
+LEFT JOIN
+generalPractitioner.identifier.assigner.identifier.type.coding AS generalPractitioner_identifier_assigner_identifier_type_coding
+LEFT JOIN
+t.link AS link
+LEFT JOIN
+link.other.identifier.type.coding AS link_other_identifier_type_coding
+LEFT JOIN
+link.other.identifier.assigner.identifier.type.coding AS link_other_identifier_assigner_identifier_type_coding
+LEFT JOIN
+t.managingOrganization.identifier.type.coding AS managingOrganization_identifier_type_coding
+LEFT JOIN
+t.managingOrganization.identifier.assigner.identifier.type.coding AS managingOrganization_identifier_assigner_identifier_type_coding
+LEFT JOIN
+t.photo AS photo
+LEFT JOIN
+t.address AS address
+LEFT JOIN
+address.line AS address_line
+LEFT JOIN
+t.communication AS communication
+LEFT JOIN
+communication.language.coding AS communication_language_coding
+LEFT JOIN
+t.identifier AS identifier
+LEFT JOIN
+identifier.assigner.identifier.type.coding AS identifier_assigner_identifier_type_coding
+LEFT JOIN
+identifier.type.coding AS identifier_type_coding
+LEFT JOIN
+t.maritalStatus.coding AS maritalStatus_coding
+LEFT JOIN
+t.meta.security AS meta_security
+LEFT JOIN
+t.meta.tag AS meta_tag
+LEFT JOIN
+t.meta.profile AS meta_profile
+LEFT JOIN
+t.name AS name
+LEFT JOIN
+name.given AS name_given
+LEFT JOIN
+name.prefix AS name_prefix
+LEFT JOIN
+name.suffix AS name_suffix
+LEFT JOIN
+t.telecom AS telecom
+)
+```
+
+#### 3 patients
+
+```{sql connection=con, output.var="bq_patients"}
+CREATE OR REPLACE TABLE `fhir_synthea_patient_summary.patients` AS (
+SELECT
+  patient_id,
+  Name
+FROM (
+  SELECT
+    id AS patient_id,
+    CONCAT(name_given," ",name_family) AS Name,
+    COUNT(*) AS count_MR
+  FROM
+    `fhir_synthea_patient_summary.vw_patient_narrow_flat` AS p
+  JOIN
+    `fhir_synthea_patient_summary.patient_registration_visit_reason` AS b
+  ON
+    p.id=b.patient_id
+  WHERE
+    identifier_type_coding_code = 'MR'
+  GROUP BY
+    1,
+    2
+  HAVING
+    count_MR = 1
+  ORDER BY
+    3 DESC
+  LIMIT
+    100 )
+)
+```
+
+### Patient Registration 
+
+#### 1 fhir_synthea.patient
+
+Public BQ dataset/table source
+
+#### 2 vw_patient_narrow_flat view 
+
+See query above. 
+
+#### 3 fhir_synthea_patient_summary.patient_registration_visit_reason
+
+Created with uploaded data 
+
+#### 4 patient registration table (output)
+
+```{sql connection=con, output.var="bq_patient_registration"}
+CREATE OR REPLACE TABLE `fhir_synthea_patient_summary.patient_registration` AS (
+SELECT
+id AS patient_id,
+CONCAT('ACME New Patient Referral / Authorization Form All below information is required as well has prior medicals for scheduling',"\n",Name,"\n",'Primary Reason of Visit: ',primary_reason_of_visit,"\n",'Date of Birth:',birthDate,"\n",'Gender: ',gender,"\n",'Patient Mailing Address: ',Address,"\n",'Language of Communication: ',communication_language_text, "\n", 'Ethnicity: ',us_core_ethnicity_text_value_string,"\n", 'Race: ',us_core_race_text_value_string,"\n",'Type of ID Provided: ',identifier_type_text,"\n",'Contact Number: ',telecom_value) AS text_registration
+FROM (
+SELECT
+id,
+CONCAT(name_given," ",name_family) AS Name,
+birthDate,
+gender,
+CONCAT(address_line,",",address_city,",",address_state,",",IFNULL(address_postalcode,'99999')) AS Address,
+communication_language_text,
+us_core_ethnicity_text_value_string,
+us_core_race_text_value_string,
+identifier_type_text,
+telecom_value,
+primary_reason_of_visit
+FROM
+`fhir_synthea_patient_summary.vw_patient_narrow_flat` AS p
+JOIN
+`fhir_synthea_patient_summary.patient_registration_visit_reason` AS b
+ON
+p.id=b.patient_id
+WHERE
+p.identifier_type_coding_code = 'MR')
+)
+```
+
+
+### Patient History 
+
+#### All
+
+##### 1. bigquery-public-data.fhir_synthea.condition
+
+##### 2. vw_condition_narrow_flat
+
+```{sql connection=con, output.var="bq_vw_condition_narrow_flat"}
+CREATE OR REPLACE VIEW `fhir_synthea_patient_summary.vw_condition_narrow_flat` AS (
+SELECT 
+/* t.asserter.practitionerId AS asserter_practitionerId,
+t.asserter.patientId AS asserter_patientId,
+t.asserter.relatedPersonId AS asserter_relatedPersonId,
+t.asserter.reference AS asserter_reference,
+t.asserter.identifier.use AS asserter_identifier_use,
+asserter_identifier_type_coding.system AS asserter_identifier_type_coding_system,
+asserter_identifier_type_coding.version AS asserter_identifier_type_coding_version,
+asserter_identifier_type_coding.code AS asserter_identifier_type_coding_code,
+asserter_identifier_type_coding.display AS asserter_identifier_type_coding_display,
+asserter_identifier_type_coding.userSelected AS asserter_identifier_type_coding_userSelected,
+t.asserter.identifier.type.text AS asserter_identifier_type_text,
+t.asserter.identifier.system AS asserter_identifier_system,
+t.asserter.identifier.value AS asserter_identifier_value,
+t.asserter.identifier.period.start AS asserter_identifier_period_start,
+t.asserter.identifier.period.end AS asserter_identifier_period_end,
+t.asserter.identifier.assigner.organizationId AS asserter_identifier_assigner_organizationId,
+t.asserter.identifier.assigner.reference AS asserter_identifier_assigner_reference,
+t.asserter.identifier.assigner.identifier.use AS asserter_identifier_assigner_identifier_use,
+asserter_identifier_assigner_identifier_type_coding.system AS asserter_identifier_assigner_identifier_type_coding_system,
+asserter_identifier_assigner_identifier_type_coding.version AS asserter_identifier_assigner_identifier_type_coding_version,
+asserter_identifier_assigner_identifier_type_coding.code AS asserter_identifier_assigner_identifier_type_coding_code,
+asserter_identifier_assigner_identifier_type_coding.display AS asserter_identifier_assigner_identifier_type_coding_display,
+asserter_identifier_assigner_identifier_type_coding.userSelected AS asserter_identifier_assigner_identifier_type_coding_userSelected,
+t.asserter.identifier.assigner.identifier.type.text AS asserter_identifier_assigner_identifier_type_text,
+t.asserter.identifier.assigner.identifier.system AS asserter_identifier_assigner_identifier_system,
+t.asserter.identifier.assigner.identifier.value AS asserter_identifier_assigner_identifier_value,
+t.asserter.identifier.assigner.identifier.period.start AS asserter_identifier_assigner_identifier_period_start,
+t.asserter.identifier.assigner.identifier.period.end AS asserter_identifier_assigner_identifier_period_end,
+t.asserter.identifier.assigner.identifier.assigner.organizationId AS asserter_identifier_assigner_identifier_assigner_organizationId,
+t.asserter.identifier.assigner.identifier.assigner.reference AS asserter_identifier_assigner_identifier_assigner_reference,
+t.asserter.identifier.assigner.identifier.assigner.display AS asserter_identifier_assigner_identifier_assigner_display,
+t.asserter.identifier.assigner.display AS asserter_identifier_assigner_display,
+t.asserter.display AS asserter_display,
+bodySite_coding.system AS bodySite_coding_system,
+bodySite_coding.version AS bodySite_coding_version,
+bodySite_coding.code AS bodySite_coding_code,
+bodySite_coding.display AS bodySite_coding_display,
+bodySite_coding.userSelected AS bodySite_coding_userSelected,
+bodySite.text AS bodySite_text,
+evidence_code_coding.system AS evidence_code_coding_system,
+evidence_code_coding.version AS evidence_code_coding_version,
+evidence_code_coding.code AS evidence_code_coding_code,
+evidence_code_coding.display AS evidence_code_coding_display,
+evidence_code_coding.userSelected AS evidence_code_coding_userSelected,
+evidence_code.text AS evidence_code_text,
+evidence_detail.resourceId AS evidence_detail_resourceId,
+evidence_detail.reference AS evidence_detail_reference,
+evidence_detail.identifier.use AS evidence_detail_identifier_use,
+evidence_detail_identifier_type_coding.system AS evidence_detail_identifier_type_coding_system,
+evidence_detail_identifier_type_coding.version AS evidence_detail_identifier_type_coding_version,
+evidence_detail_identifier_type_coding.code AS evidence_detail_identifier_type_coding_code,
+evidence_detail_identifier_type_coding.display AS evidence_detail_identifier_type_coding_display,
+evidence_detail_identifier_type_coding.userSelected AS evidence_detail_identifier_type_coding_userSelected,
+evidence_detail.identifier.type.text AS evidence_detail_identifier_type_text,
+evidence_detail.identifier.system AS evidence_detail_identifier_system,
+evidence_detail.identifier.value AS evidence_detail_identifier_value,
+evidence_detail.identifier.period.start AS evidence_detail_identifier_period_start,
+evidence_detail.identifier.period.end AS evidence_detail_identifier_period_end,
+evidence_detail.identifier.assigner.organizationId AS evidence_detail_identifier_assigner_organizationId,
+evidence_detail.identifier.assigner.reference AS evidence_detail_identifier_assigner_reference,
+evidence_detail.identifier.assigner.identifier.use AS evidence_detail_identifier_assigner_identifier_use,
+evidence_detail_identifier_assigner_identifier_type_coding.system AS evidence_detail_identifier_assigner_identifier_type_coding_system,
+evidence_detail_identifier_assigner_identifier_type_coding.version AS evidence_detail_identifier_assigner_identifier_type_coding_version,
+evidence_detail_identifier_assigner_identifier_type_coding.code AS evidence_detail_identifier_assigner_identifier_type_coding_code,
+evidence_detail_identifier_assigner_identifier_type_coding.display AS evidence_detail_identifier_assigner_identifier_type_coding_display,
+evidence_detail_identifier_assigner_identifier_type_coding.userSelected AS evidence_detail_identifier_assigner_identifier_type_coding_userSelected,
+evidence_detail.identifier.assigner.identifier.type.text AS evidence_detail_identifier_assigner_identifier_type_text,
+evidence_detail.identifier.assigner.identifier.system AS evidence_detail_identifier_assigner_identifier_system,
+evidence_detail.identifier.assigner.identifier.value AS evidence_detail_identifier_assigner_identifier_value,
+evidence_detail.identifier.assigner.identifier.period.start AS evidence_detail_identifier_assigner_identifier_period_start,
+evidence_detail.identifier.assigner.identifier.period.end AS evidence_detail_identifier_assigner_identifier_period_end,
+evidence_detail.identifier.assigner.identifier.assigner.organizationId AS evidence_detail_identifier_assigner_identifier_assigner_organizationId,
+evidence_detail.identifier.assigner.identifier.assigner.reference AS evidence_detail_identifier_assigner_identifier_assigner_reference,
+evidence_detail.identifier.assigner.identifier.assigner.display AS evidence_detail_identifier_assigner_identifier_assigner_display,
+evidence_detail.identifier.assigner.display AS evidence_detail_identifier_assigner_display,
+evidence_detail.display AS evidence_detail_display,
+identifier.use AS identifier_use,
+identifier_type_coding.system AS identifier_type_coding_system,
+identifier_type_coding.version AS identifier_type_coding_version,
+identifier_type_coding.code AS identifier_type_coding_code,
+identifier_type_coding.display AS identifier_type_coding_display,
+identifier_type_coding.userSelected AS identifier_type_coding_userSelected,
+identifier.type.text AS identifier_type_text,
+identifier.system AS identifier_system,
+identifier.value AS identifier_value,
+identifier.period.start AS identifier_period_start,
+identifier.period.end AS identifier_period_end,
+identifier.assigner.organizationId AS identifier_assigner_organizationId,
+identifier.assigner.reference AS identifier_assigner_reference,
+identifier.assigner.identifier.use AS identifier_assigner_identifier_use,
+identifier_assigner_identifier_type_coding.system AS identifier_assigner_identifier_type_coding_system,
+identifier_assigner_identifier_type_coding.version AS identifier_assigner_identifier_type_coding_version,
+identifier_assigner_identifier_type_coding.code AS identifier_assigner_identifier_type_coding_code,
+identifier_assigner_identifier_type_coding.display AS identifier_assigner_identifier_type_coding_display,
+identifier_assigner_identifier_type_coding.userSelected AS identifier_assigner_identifier_type_coding_userSelected,
+identifier.assigner.identifier.type.text AS identifier_assigner_identifier_type_text,
+identifier.assigner.identifier.system AS identifier_assigner_identifier_system,
+identifier.assigner.identifier.value AS identifier_assigner_identifier_value,
+identifier.assigner.identifier.period.start AS identifier_assigner_identifier_period_start,
+identifier.assigner.identifier.period.end AS identifier_assigner_identifier_period_end,
+identifier.assigner.identifier.assigner.organizationId AS identifier_assigner_identifier_assigner_organizationId,
+identifier.assigner.identifier.assigner.reference AS identifier_assigner_identifier_assigner_reference,
+identifier.assigner.identifier.assigner.display AS identifier_assigner_identifier_assigner_display,
+identifier.assigner.display AS identifier_assigner_display,
+t.implicitRules AS implicitRules,
+t.language AS language,
+note.author.reference.practitionerId AS note_author_reference_practitionerId,
+note.author.reference.patientId AS note_author_reference_patientId,
+note.author.reference.relatedPersonId AS note_author_reference_relatedPersonId,
+note.author.reference.reference AS note_author_reference_reference,
+note.author.reference.identifier.use AS note_author_reference_identifier_use,
+note_author_reference_identifier_type_coding.system AS note_author_reference_identifier_type_coding_system,
+note_author_reference_identifier_type_coding.version AS note_author_reference_identifier_type_coding_version,
+note_author_reference_identifier_type_coding.code AS note_author_reference_identifier_type_coding_code,
+note_author_reference_identifier_type_coding.display AS note_author_reference_identifier_type_coding_display,
+note_author_reference_identifier_type_coding.userSelected AS note_author_reference_identifier_type_coding_userSelected,
+note.author.reference.identifier.type.text AS note_author_reference_identifier_type_text,
+note.author.reference.identifier.system AS note_author_reference_identifier_system,
+note.author.reference.identifier.value AS note_author_reference_identifier_value,
+note.author.reference.identifier.period.start AS note_author_reference_identifier_period_start,
+note.author.reference.identifier.period.end AS note_author_reference_identifier_period_end,
+note.author.reference.identifier.assigner.organizationId AS note_author_reference_identifier_assigner_organizationId,
+note.author.reference.identifier.assigner.reference AS note_author_reference_identifier_assigner_reference,
+note.author.reference.identifier.assigner.identifier.use AS note_author_reference_identifier_assigner_identifier_use,
+note_author_reference_identifier_assigner_identifier_type_coding.system AS note_author_reference_identifier_assigner_identifier_type_coding_system,
+note_author_reference_identifier_assigner_identifier_type_coding.version AS note_author_reference_identifier_assigner_identifier_type_coding_version,
+note_author_reference_identifier_assigner_identifier_type_coding.code AS note_author_reference_identifier_assigner_identifier_type_coding_code,
+note_author_reference_identifier_assigner_identifier_type_coding.display AS note_author_reference_identifier_assigner_identifier_type_coding_display,
+note_author_reference_identifier_assigner_identifier_type_coding.userSelected AS note_author_reference_identifier_assigner_identifier_type_coding_userSelected,
+note.author.reference.identifier.assigner.identifier.type.text AS note_author_reference_identifier_assigner_identifier_type_text,
+note.author.reference.identifier.assigner.identifier.system AS note_author_reference_identifier_assigner_identifier_system,
+note.author.reference.identifier.assigner.identifier.value AS note_author_reference_identifier_assigner_identifier_value,
+note.author.reference.identifier.assigner.identifier.period.start AS note_author_reference_identifier_assigner_identifier_period_start,
+note.author.reference.identifier.assigner.identifier.period.end AS note_author_reference_identifier_assigner_identifier_period_end,
+note.author.reference.identifier.assigner.identifier.assigner.organizationId AS note_author_reference_identifier_assigner_identifier_assigner_organizationId,
+note.author.reference.identifier.assigner.identifier.assigner.reference AS note_author_reference_identifier_assigner_identifier_assigner_reference,
+note.author.reference.identifier.assigner.identifier.assigner.display AS note_author_reference_identifier_assigner_identifier_assigner_display,
+note.author.reference.identifier.assigner.display AS note_author_reference_identifier_assigner_display,
+note.author.reference.display AS note_author_reference_display,
+note.author.string AS note_author_string,
+note.time AS note_time,
+note.text AS note_text,
+severity_coding.system AS severity_coding_system,
+severity_coding.version AS severity_coding_version,
+severity_coding.code AS severity_coding_code,
+severity_coding.display AS severity_coding_display,
+severity_coding.userSelected AS severity_coding_userSelected,
+t.severity.text AS severity_text,
+stage_summary_coding.system AS stage_summary_coding_system,
+stage_summary_coding.version AS stage_summary_coding_version,
+stage_summary_coding.code AS stage_summary_coding_code,
+stage_summary_coding.display AS stage_summary_coding_display,
+stage_summary_coding.userSelected AS stage_summary_coding_userSelected,
+t.stage.summary.text AS stage_summary_text,
+stage_assessment.clinicalImpressionId AS stage_assessment_clinicalImpressionId,
+stage_assessment.diagnosticReportId AS stage_assessment_diagnosticReportId,
+stage_assessment.observationId AS stage_assessment_observationId,
+stage_assessment.reference AS stage_assessment_reference,
+stage_assessment.identifier.use AS stage_assessment_identifier_use,
+stage_assessment_identifier_type_coding.system AS stage_assessment_identifier_type_coding_system,
+stage_assessment_identifier_type_coding.version AS stage_assessment_identifier_type_coding_version,
+stage_assessment_identifier_type_coding.code AS stage_assessment_identifier_type_coding_code,
+stage_assessment_identifier_type_coding.display AS stage_assessment_identifier_type_coding_display,
+stage_assessment_identifier_type_coding.userSelected AS stage_assessment_identifier_type_coding_userSelected,
+stage_assessment.identifier.type.text AS stage_assessment_identifier_type_text,
+stage_assessment.identifier.system AS stage_assessment_identifier_system,
+stage_assessment.identifier.value AS stage_assessment_identifier_value,
+stage_assessment.identifier.period.start AS stage_assessment_identifier_period_start,
+stage_assessment.identifier.period.end AS stage_assessment_identifier_period_end,
+stage_assessment.identifier.assigner.organizationId AS stage_assessment_identifier_assigner_organizationId,
+stage_assessment.identifier.assigner.reference AS stage_assessment_identifier_assigner_reference,
+stage_assessment.identifier.assigner.identifier.use AS stage_assessment_identifier_assigner_identifier_use,
+stage_assessment_identifier_assigner_identifier_type_coding.system AS stage_assessment_identifier_assigner_identifier_type_coding_system,
+stage_assessment_identifier_assigner_identifier_type_coding.version AS stage_assessment_identifier_assigner_identifier_type_coding_version,
+stage_assessment_identifier_assigner_identifier_type_coding.code AS stage_assessment_identifier_assigner_identifier_type_coding_code,
+stage_assessment_identifier_assigner_identifier_type_coding.display AS stage_assessment_identifier_assigner_identifier_type_coding_display,
+stage_assessment_identifier_assigner_identifier_type_coding.userSelected AS stage_assessment_identifier_assigner_identifier_type_coding_userSelected,
+stage_assessment.identifier.assigner.identifier.type.text AS stage_assessment_identifier_assigner_identifier_type_text,
+stage_assessment.identifier.assigner.identifier.system AS stage_assessment_identifier_assigner_identifier_system,
+stage_assessment.identifier.assigner.identifier.value AS stage_assessment_identifier_assigner_identifier_value,
+stage_assessment.identifier.assigner.identifier.period.start AS stage_assessment_identifier_assigner_identifier_period_start,
+stage_assessment.identifier.assigner.identifier.period.end AS stage_assessment_identifier_assigner_identifier_period_end,
+stage_assessment.identifier.assigner.identifier.assigner.organizationId AS stage_assessment_identifier_assigner_identifier_assigner_organizationId,
+stage_assessment.identifier.assigner.identifier.assigner.reference AS stage_assessment_identifier_assigner_identifier_assigner_reference,
+stage_assessment.identifier.assigner.identifier.assigner.display AS stage_assessment_identifier_assigner_identifier_assigner_display,
+stage_assessment.identifier.assigner.display AS stage_assessment_identifier_assigner_display,
+stage_assessment.display AS stage_assessment_display,
+t.text.status AS text_status,
+t.text.div AS text_div,
+t.abatement.age.value AS abatement_age_value,
+t.abatement.age.comparator AS abatement_age_comparator,
+t.abatement.age.unit AS abatement_age_unit,
+t.abatement.age.system AS abatement_age_system,
+t.abatement.age.code AS abatement_age_code,
+t.abatement.boolean AS abatement_boolean,
+t.abatement.period.start AS abatement_period_start,
+t.abatement.period.end AS abatement_period_end,
+t.abatement.range.low.value AS abatement_range_low_value,
+t.abatement.range.low.unit AS abatement_range_low_unit,
+t.abatement.range.low.system AS abatement_range_low_system,
+t.abatement.range.low.code AS abatement_range_low_code,
+t.abatement.range.high.value AS abatement_range_high_value,
+t.abatement.range.high.unit AS abatement_range_high_unit,
+t.abatement.range.high.system AS abatement_range_high_system,
+t.abatement.range.high.code AS abatement_range_high_code,
+t.abatement.string AS abatement_string,
+t.abatement.dateTime AS abatement_dateTime,*/
+t.assertedDate AS assertedDate,
+--category.text AS category_text,
+--category_coding.userSelected AS category_coding_userSelected,
+--category_coding.version AS category_coding_version,
+category_coding.code AS category_coding_code,
+category_coding.display AS category_coding_display,
+category_coding.system AS category_coding_system,
+t.clinicalStatus AS clinicalStatus,
+code_coding.userSelected AS code_coding_userSelected,
+code_coding.version AS code_coding_version,
+code_coding.code AS code_coding_code,
+code_coding.display AS code_coding_display,
+code_coding.system AS code_coding_system,
+t.code.text AS code_text,
+/*t.context.display AS context_display,
+t.context.episodeOfCareId AS context_episodeOfCareId,
+t.context.identifier.use AS context_identifier_use,
+context_identifier_type_coding.system AS context_identifier_type_coding_system,
+context_identifier_type_coding.version AS context_identifier_type_coding_version,
+context_identifier_type_coding.code AS context_identifier_type_coding_code,
+context_identifier_type_coding.display AS context_identifier_type_coding_display,
+context_identifier_type_coding.userSelected AS context_identifier_type_coding_userSelected,
+t.context.identifier.type.text AS context_identifier_type_text,
+t.context.identifier.system AS context_identifier_system,
+t.context.identifier.value AS context_identifier_value,
+t.context.identifier.period.start AS context_identifier_period_start,
+t.context.identifier.period.end AS context_identifier_period_end,
+t.context.identifier.assigner.organizationId AS context_identifier_assigner_organizationId,
+t.context.identifier.assigner.reference AS context_identifier_assigner_reference,
+t.context.identifier.assigner.identifier.use AS context_identifier_assigner_identifier_use,
+context_identifier_assigner_identifier_type_coding.system AS context_identifier_assigner_identifier_type_coding_system,
+context_identifier_assigner_identifier_type_coding.version AS context_identifier_assigner_identifier_type_coding_version,
+context_identifier_assigner_identifier_type_coding.code AS context_identifier_assigner_identifier_type_coding_code,
+context_identifier_assigner_identifier_type_coding.display AS context_identifier_assigner_identifier_type_coding_display,
+context_identifier_assigner_identifier_type_coding.userSelected AS context_identifier_assigner_identifier_type_coding_userSelected,
+t.context.identifier.assigner.identifier.type.text AS context_identifier_assigner_identifier_type_text,
+t.context.identifier.assigner.identifier.system AS context_identifier_assigner_identifier_system,
+t.context.identifier.assigner.identifier.value AS context_identifier_assigner_identifier_value,
+t.context.identifier.assigner.identifier.period.start AS context_identifier_assigner_identifier_period_start,
+t.context.identifier.assigner.identifier.period.end AS context_identifier_assigner_identifier_period_end,
+t.context.identifier.assigner.identifier.assigner.organizationId AS context_identifier_assigner_identifier_assigner_organizationId,
+t.context.identifier.assigner.identifier.assigner.reference AS context_identifier_assigner_identifier_assigner_reference,
+t.context.identifier.assigner.identifier.assigner.display AS context_identifier_assigner_identifier_assigner_display,
+t.context.identifier.assigner.display AS context_identifier_assigner_display,
+t.context.reference AS context_reference,*/
+t.context.encounterId AS context_encounterId,
+t.id AS id,
+/*t.meta.lastUpdated AS meta_lastUpdated,
+meta_security.system AS meta_security_system,
+meta_security.version AS meta_security_version,
+meta_security.code AS meta_security_code,
+meta_security.display AS meta_security_display,
+meta_security.userSelected AS meta_security_userSelected,
+meta_tag.system AS meta_tag_system,
+meta_tag.version AS meta_tag_version,
+meta_tag.code AS meta_tag_code,
+meta_tag.display AS meta_tag_display,
+meta_tag.userSelected AS meta_tag_userSelected,
+t.meta.versionId AS meta_versionId,
+meta_profile,
+t.onset.age.value AS onset_age_value,
+t.onset.age.comparator AS onset_age_comparator,
+t.onset.age.unit AS onset_age_unit,
+t.onset.age.system AS onset_age_system,
+t.onset.age.code AS onset_age_code,
+t.onset.period.start AS onset_period_start,
+t.onset.period.end AS onset_period_end,
+t.onset.range.low.value AS onset_range_low_value,
+t.onset.range.low.unit AS onset_range_low_unit,
+t.onset.range.low.system AS onset_range_low_system,
+t.onset.range.low.code AS onset_range_low_code,
+t.onset.range.high.value AS onset_range_high_value,
+t.onset.range.high.unit AS onset_range_high_unit,
+t.onset.range.high.system AS onset_range_high_system,
+t.onset.range.high.code AS onset_range_high_code,
+t.onset.string AS onset_string,*/
+t.onset.dateTime AS onset_dateTime,
+/*
+t.subject.display AS subject_display,
+t.subject.groupId AS subject_groupId,
+t.subject.identifier.use AS subject_identifier_use,
+subject_identifier_type_coding.system AS subject_identifier_type_coding_system,
+subject_identifier_type_coding.version AS subject_identifier_type_coding_version,
+subject_identifier_type_coding.code AS subject_identifier_type_coding_code,
+subject_identifier_type_coding.display AS subject_identifier_type_coding_display,
+subject_identifier_type_coding.userSelected AS subject_identifier_type_coding_userSelected,
+t.subject.identifier.type.text AS subject_identifier_type_text,
+t.subject.identifier.system AS subject_identifier_system,
+t.subject.identifier.value AS subject_identifier_value,
+t.subject.identifier.period.start AS subject_identifier_period_start,
+t.subject.identifier.period.end AS subject_identifier_period_end,
+t.subject.identifier.assigner.organizationId AS subject_identifier_assigner_organizationId,
+t.subject.identifier.assigner.reference AS subject_identifier_assigner_reference,
+t.subject.identifier.assigner.identifier.use AS subject_identifier_assigner_identifier_use,
+subject_identifier_assigner_identifier_type_coding.system AS subject_identifier_assigner_identifier_type_coding_system,
+subject_identifier_assigner_identifier_type_coding.version AS subject_identifier_assigner_identifier_type_coding_version,
+subject_identifier_assigner_identifier_type_coding.code AS subject_identifier_assigner_identifier_type_coding_code,
+subject_identifier_assigner_identifier_type_coding.display AS subject_identifier_assigner_identifier_type_coding_display,
+subject_identifier_assigner_identifier_type_coding.userSelected AS subject_identifier_assigner_identifier_type_coding_userSelected,
+t.subject.identifier.assigner.identifier.type.text AS subject_identifier_assigner_identifier_type_text,
+t.subject.identifier.assigner.identifier.system AS subject_identifier_assigner_identifier_system,
+t.subject.identifier.assigner.identifier.value AS subject_identifier_assigner_identifier_value,
+t.subject.identifier.assigner.identifier.period.start AS subject_identifier_assigner_identifier_period_start,
+t.subject.identifier.assigner.identifier.period.end AS subject_identifier_assigner_identifier_period_end,
+t.subject.identifier.assigner.identifier.assigner.organizationId AS subject_identifier_assigner_identifier_assigner_organizationId,
+t.subject.identifier.assigner.identifier.assigner.reference AS subject_identifier_assigner_identifier_assigner_reference,
+t.subject.identifier.assigner.identifier.assigner.display AS subject_identifier_assigner_identifier_assigner_display,
+t.subject.identifier.assigner.display AS subject_identifier_assigner_display,
+t.subject.reference AS subject_reference,*/
+t.subject.patientId AS subject_patientId,
+t.verificationStatus AS verificationStatus
+FROM `bigquery-public-data.fhir_synthea.condition` AS t LEFT JOIN
+t.asserter.identifier.type.coding AS asserter_identifier_type_coding LEFT JOIN
+t.asserter.identifier.assigner.identifier.type.coding AS asserter_identifier_assigner_identifier_type_coding LEFT JOIN
+t.bodySite AS bodySite LEFT JOIN
+bodySite.coding AS bodySite_coding LEFT JOIN
+t.evidence AS evidence LEFT JOIN
+evidence.code AS evidence_code LEFT JOIN
+evidence_code.coding AS evidence_code_coding LEFT JOIN
+evidence.detail AS evidence_detail LEFT JOIN
+evidence_detail.identifier.type.coding AS evidence_detail_identifier_type_coding LEFT JOIN
+evidence_detail.identifier.assigner.identifier.type.coding AS evidence_detail_identifier_assigner_identifier_type_coding LEFT JOIN
+t.identifier AS identifier LEFT JOIN
+identifier.type.coding AS identifier_type_coding LEFT JOIN
+identifier.assigner.identifier.type.coding AS identifier_assigner_identifier_type_coding LEFT JOIN
+t.note AS note LEFT JOIN
+note.author.reference.identifier.type.coding AS note_author_reference_identifier_type_coding LEFT JOIN
+note.author.reference.identifier.assigner.identifier.type.coding AS note_author_reference_identifier_assigner_identifier_type_coding LEFT JOIN
+t.severity.coding AS severity_coding LEFT JOIN
+t.stage.summary.coding AS stage_summary_coding LEFT JOIN
+t.stage.assessment AS stage_assessment LEFT JOIN
+stage_assessment.identifier.type.coding AS stage_assessment_identifier_type_coding LEFT JOIN
+stage_assessment.identifier.assigner.identifier.type.coding AS stage_assessment_identifier_assigner_identifier_type_coding LEFT JOIN
+t.category AS category LEFT JOIN
+category.coding AS category_coding LEFT JOIN
+t.code.coding AS code_coding LEFT JOIN
+t.context.identifier.type.coding AS context_identifier_type_coding LEFT JOIN
+t.context.identifier.assigner.identifier.type.coding AS context_identifier_assigner_identifier_type_coding LEFT JOIN
+t.meta.security AS meta_security LEFT JOIN
+t.meta.tag AS meta_tag LEFT JOIN
+t.meta.profile AS meta_profile LEFT JOIN
+t.subject.identifier.type.coding AS subject_identifier_type_coding LEFT JOIN
+t.subject.identifier.assigner.identifier.type.coding AS subject_identifier_assigner_identifier_type_coding
+)
+```
+
+##### 3. patient history table (output)
+
+```{sql connection=con, output.var="bq_patient_history100"}
+CREATE OR REPLACE TABLE `fhir_synthea_patient_summary.patient_history` AS (
+SELECT
+patient_id,
+STRING_AGG(text_history, "") AS text_history
+FROM (
+SELECT
+subject_patientId AS patient_id,
+CONCAT('Date of Diagnosis: ',asserteddate, "\n",'Patient diagnosis category: ',category_coding_display,"\n",'Most Responsible Diagnosis Code:',code_coding_code,"\n", 'Active Issues Managed in Hospital: ',code_coding_display,"\n",'Patient Verification Status: ',verificationStatus, "\n") AS text_history
+FROM
+`fhir_synthea_patient_summary.vw_condition_narrow_flat` AS c
+JOIN
+`fhir_synthea_patient_summary.patients` AS b
+ON
+c.subject_patientId=b.patient_id
+ORDER BY
+c.onset_dateTime ASC )
+GROUP BY
+patient_id
+)
+```
+
+#### Previous 2 years
+
+##### 1. bigquery-public-data.fhir_synthea.condition
+
+##### 2. fhir_synthea.vw_condition_narrow_flat_2yrs
+
+```{sql connection=con, output.var="bq_vw_condition_narrow_flat_2yrs"}
+CREATE OR REPLACE VIEW `fhir_synthea_patient_summary.vw_condition_narrow_flat_2yrs` AS (
+SELECT
+a.*
+FROM
+`fhir_synthea_patient_summary.vw_condition_narrow_flat` a,
+(
+SELECT
+subject_patientId,
+MAX(EXTRACT(year
+FROM
+bigfunctions.us.parse_date(asserteddate))) max_year
+FROM
+`fhir_synthea_patient_summary.vw_condition_narrow_flat`
+GROUP BY
+1) b
+WHERE
+a.subject_patientId = b.subject_patientId
+AND EXTRACT(year
+FROM
+bigfunctions.us.parse_date(asserteddate)) >= max_year - 2
+)
+```
+
+##### 3. fhir_synthea_patient_summary.patient_history_2yrs
+
+```{sql connection=con, output.var="bq_patient_history_2yrs"}
+CREATE OR REPLACE TABLE `fhir_synthea_patient_summary.patient_history_2yrs` AS (
+SELECT
+patient_id,
+STRING_AGG(text_history, "") AS text_history
+FROM (
+SELECT
+subject_patientId AS patient_id,
+CONCAT('Date of Diagnosis: ',asserteddate, "\n",'Patient diagnosis category: ',category_coding_display,"\n",'Most Responsible Diagnosis Code:',code_coding_code,"\n", 'Active Issues Managed in Hospital: ',code_coding_display,"\n",'Patient Verification Status: ',verificationStatus, "\n") AS text_history
+FROM
+`fhir_synthea_patient_summary.vw_condition_narrow_flat_2yrs` AS c
+JOIN
+`fhir_synthea_patient_summary.patients` AS b
+ON
+c.subject_patientId=b.patient_id
+ORDER BY
+c.onset_dateTime ASC )
+GROUP BY
+patient_id )
+```
+
+### Patient Registration and History
+
+for Shiny app user input - all patient data 
+
+#### Full History
+
+```{sql connection=con, output.var="bq_patient_all"}
+CREATE OR REPLACE TABLE
+`fhir_synthea_patient_summary.patient_all` AS (
+SELECT
+h.patient_id AS patient_id,
+text_registration,
+text_history
+FROM
+`fhir_synthea_patient_summary.patient_registration` AS r
+JOIN
+`fhir_synthea_patient_summary.patient_history` AS h
+ON
+r.patient_id=h.patient_id )
+```
+
+
+#### Previous 2 years History
+
+```{sql connection=con, output.var="bq_patient_all_2yrs"}
+CREATE OR REPLACE TABLE
+`fhir_synthea_patient_summary.patient_all_2yrs` AS (
+SELECT
+h.patient_id AS patient_id,
+text_registration,
+text_history
+FROM
+`fhir_synthea_patient_summary.patient_registration` AS r
+JOIN
+`fhir_synthea_patient_summary.patient_history_2yrs` AS h
+ON
+r.patient_id=h.patient_id )
+```
+
+
+### Patients User Input 
+
+output for Shiny app - list of patients for user input selection and WebMD Search
+
+
+```{sql connection=con, output.var="bq_patients_user_input"}
+CREATE OR REPLACE TABLE `fhir_synthea_patient_summary.patients_user_input` AS (
+SELECT
+a.patient_id,
+a.Name AS name,
+b.primary_reason_of_visit
+FROM
+`fhir_synthea_patient_summary.patients` AS a
+JOIN
+`fhir_synthea_patient_summary.patient_registration_visit_reason` AS b
+ON
+a.patient_id = b.patient_id )
+```

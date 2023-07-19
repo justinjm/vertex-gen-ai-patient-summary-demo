@@ -1,0 +1,10 @@
+# .gitignore
+.Rproj.user
+.Rhistory
+.RData
+.Ruserdata
+.Renviron*
+
+## secrets file
+secrets.R
+.secrets.R

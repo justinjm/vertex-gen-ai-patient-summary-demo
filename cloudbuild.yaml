@@ -1,0 +1,48 @@
+steps:
+# Build the container image
+- name: 'gcr.io/cloud-builders/docker'
+  id: 'build image'
+  args: [
+    'build', 
+    '-t', 
+    '$LOCATION-docker.pkg.dev/$PROJECT_ID/patient-summary/patient-summary:latest', 
+    '-f', 
+    'Dockerfile', 
+    '.',
+ ]
+  dir: 'build' 
+# Push the container image to Container Registry
+- name: 'gcr.io/cloud-builders/docker'
+  id: 'push image'
+  args: [
+    'push', 
+    '$LOCATION-docker.pkg.dev/$PROJECT_ID/patient-summary/patient-summary:latest'
+    ]
+# Deploy container image to Cloud Run
+- name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+  id: 'deploy'
+  entrypoint: gcloud
+  args:
+  - 'run'
+  - 'deploy'
+  - 'patient-summary' 
+  - '--image'
+  - '$LOCATION-docker.pkg.dev/$PROJECT_ID/patient-summary/patient-summary:latest'
+  - '--region'
+  - 'us-central1'
+  - '--platform'
+  - 'managed'
+  - '--port'
+  - '5000'
+  - '--allow-unauthenticated'
+  - '--session-affinity' 
+  - '--service-account'
+  - 'patient-summary@$PROJECT_ID.iam.gserviceaccount.com'
+  - '--min-instances'
+  - '0' 
+  - '--max-instances'
+  - '5'
+  - '--set-secrets'
+  - '/secrets/.secrets.R=patient-summary-secrets:latest' 
+images:
+  - '$LOCATION-docker.pkg.dev/$PROJECT_ID/patient-summary/patient-summary:latest'

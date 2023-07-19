@@ -1,0 +1,101 @@
+patient_id,name,primary_reason_of_visit
+0c8a7c60-4e2f-4892-9669-9e4c100f3714,Lorena247 Escamilla823,Rash
+a1a3e19f-3517-4ec1-9242-fa3050a5758b,Waldo53 Turcotte120,Rash
+4a2722fa-a07c-4f8f-aace-08e2f9ca2f16,Graham902 Gleason633,Rash
+21ee41a2-f384-4d1b-84b5-3d6f71094867,Hugh686 Rath779,Rash
+d5aca71b-d933-437b-897d-0b4aff154f33,Isaias604 Herman763,Rash
+4bccdc85-c040-45dd-ada3-a55064439a01,Homero668 Holgu’n308,Rash
+8032ad13-fc72-4a4e-b261-a3b49f50d941,Teresa94 Arias66,Cough
+41dbee4d-d355-413f-a040-93ca037fe646,Elmo857 Wisozk929,Cough
+9af934bb-5cb2-4cac-96a1-e3016593ba87,Bernardo699 Escobar593,Cough
+98a56443-8bb9-4054-a8d7-f5afc95e17ae,Jarod376 Bailey598,Cough
+1a0a682e-3265-4f31-af7d-fd7c6fd18f93,Hassan290 Zulauf375,Cough
+4cc91df1-d2d5-4e05-ad97-8fef8ca95251,Adela471 Arteaga169,Cough
+fa00b120-f9e9-41de-9dbb-c3380b8f5a0f,Mateo562 J‡quez824,Cough
+fbaff489-95a6-4bb0-bf3e-784f261fed5e,Guillermina633 Tello902,Fever
+cad4a6d3-fb15-46b6-b28b-e1a859fc8177,Horacio317 Verduzco998,Fever
+e15f652e-8280-45b1-8f76-e02d7adbbdce,Aurelio227 Parisian75,Fever
+336dffa5-ca4e-4cf3-ac91-0e1aaba48598,V’ctor493 Hern‡dez343,Fever
+158a6eae-5528-48ac-bec1-8d0aa7915fb3,Edwin773 Veum823,Fever
+8e3421ac-844c-4181-be78-b26fedfef146,Mariana775 Riojas420,Fever
+e42800f2-0131-46f7-8d50-79765f6690f2,Sandee884 Purdy2,Fever
+b36d6b99-54f1-4714-b8ed-c9ce698f8669,Christopher407 Buckridge80,Urinary
+18f2da6c-3c6c-49bf-b552-e5a0928837d2,Jess275 Mayert710,Urinary
+a5fc3d65-b568-4da5-84d8-534699131169,Marcus77 Windler79,Urinary
+a4ab38ad-7392-4961-9a24-fae29ef2157a,Orlando897 Pouros728,Urinary
+a76175aa-a86b-4f3c-92f7-28912c357925,Tory770 Bartoletti50,Urinary
+e397f53f-ff7a-4304-b0fa-ecefd2eb3161,Angelo118 Bernhard322,Urinary
+4a650a2f-292f-4848-b0c9-ec69aef45da1,Lynn917 Anderson154,Diabetes
+e194d708-8989-4e0c-a8e1-eda7351672ce,Salvador46 Mayorga262,Diabetes
+4e80682c-c4ab-4b31-9c8f-9cf79cb39eec,Cristian531 Vaca409,Diabetes
+1d3118be-6168-4372-895e-7e096b4fb41f,Jame231 Huel628,Diabetes
+e04fcfc1-2984-4e0c-9006-c7e90e002faf,Armando772 Rend—n540,Diabetes
+7d428e41-52f7-4da5-9e75-8ef83bd6f173,Yolanda648 Amaya149,Diabetes
+7859a29e-1494-425c-b4f9-2064295c85c1,Alberto639 Mercado213,Diabetes
+e19ed657-ef6b-453f-acc2-a83ebb02d0b5,Catalina187 Crespo500,Ear Pain
+e9aaf98e-a8d1-4ed3-b819-8d31be1e23bb,Dannie881 Parker433,Ear Pain
+0a167768-f29c-447c-a7af-47b8c2569d1d,Gabriel934 Alonzo487,Ear Pain
+ab3bf8af-124a-473b-a3cb-76ae45564cc0,Raœl937 Perales854,Ear Pain
+681ed06a-b179-4aa8-852c-ea8d259abb46,Cristobal567 Otero621,Ear Pain
+9a6db00e-e894-4693-b74e-dd7706842433,Paris331 Brown30,Ear Pain
+fdb661ec-55cb-4b93-afa2-d4b3149ec8da,Bradly656 Sawayn19,Ear Pain
+97d713c0-a256-4315-bc14-b64c92ef632b,Manuela585 Segura601,Back Pain
+de558190-9339-460f-8ab8-03fe50107bd8,Sara501 Santana368,Back Pain
+2a283f6e-855b-477a-8edc-b24d45d85815,Jorge Luis88 Mercado213,Back Pain
+5e4a0f91-9fa9-4933-b232-6cf481e0474e,Agust’n529 Mar’n855,Back Pain
+7d10ea5d-d416-41c4-bdb4-f17214fef618,Brett333 Huels583,Back Pain
+3e2849cc-58f0-445f-ac08-66bde19546d2,Jill895 Brown30,Back Pain
+e571fb6d-ffcc-46e7-8a78-c3f093066d9f,Emilio417 Pulido715,Back Pain
+88430cc1-fb79-4dc8-b452-475ff0b3826b,Alejandra902 Garay400,Sore Throat
+466cdc09-8fc8-4501-84fc-98364dd7d551,Donn979 Sauer652,Sore Throat
+1d4e68d7-880f-4f3c-9436-f05831cb7bac,Gerardo48 Ord�–ez148,Sore Throat
+f8637589-b00f-4110-b4e9-68a1e8eaa52e,Scott935 Bednar518,Sore Throat
+6feacaab-8b14-470f-8c2c-99c6600a6ae3,Arla414 Romaguera67,Sore Throat
+f2ca3683-427d-4ba6-a9a8-e4082f544539,Theron432 Schulist381,Sore Throat
+d460db22-3269-4cae-bc2a-14248da4319b,Jonah176 Morar593,Cold and Flu
+dba01afb-7716-4b73-a645-d000e5316aea,Omar359 Eichmann909,Cold and Flu
+778975c8-f112-4bfa-94c0-3ca4af0f4756,Manuel446 Cardona494,Cold and Flu
+576a1062-71d5-4ce7-96c9-d424ddd3ce74,Frank378 Emmerich580,Cold and Flu
+a09c4f56-6f6f-441b-a4d5-54885d1faebc,Ricardo560 Olmos892,Cold and Flu
+70ca0d30-cbb8-4d6f-af2e-a92a4a2a77cc,Tona622 Romaguera67,Cold and Flu
+efd1fa06-e1f9-41b8-b9c1-b98433294227,Emilia403 Armenta418,Cold and Flu
+377c2220-ef23-4d9c-92a1-38bc5cf7160c,Olivia294 Ara–a824,Hypertension
+b9b55f59-6f87-4100-bb81-63ec233b82dd,Dallas143 Beer512,Hypertension
+32202944-d501-4b61-ba7b-d6d57d137d24,Cornelius968 Pouros728,Hypertension
+772df8e6-2b47-4f93-b020-7e4af21cd6e2,Sydney660 Becker968,Hypertension
+932ae186-6880-4287-b570-32c9faea9df7,Emory494 Metz686,Hypertension
+dd50d633-055e-450a-8480-88ab137137e1,Corine538 Maggio310,Hypertension
+c885e763-9287-4097-bcb8-69b4971b90c1,Rodrigo242 CortŽs936,Hypertension
+6759d2b7-38b4-4798-97c0-d171a53e013a,RubŽn780 Vaca409,Neurological
+8dca4c3c-d2d5-460f-9168-5f18e5d29b2b,Jesœs825 Garay400,Neurological
+e3908397-0a9a-4bd1-a59f-d4869dffb12b,RubŽn780 Agosto501,Neurological
+0d52fd3c-6769-41f9-a9f7-b5831a9e0821,Dominic463 Jacobson885,Neurological
+77df8f34-896b-4d59-bc3f-c4c411a27b63,Mariano761 Cruickshank494,Neurological
+5d017d6e-2c18-4bf2-a6bb-3f1d4273953f,Mariana775 Archuleta517,Neurological
+634e4aa8-6f96-40b5-8c1c-4fffe6602c1a,Marco Antonio298 Palomo90,Abdominal Pain
+47c8ea59-f87d-45b4-8eb0-9ce7d89f667a,Merlin721 Bosco882,Abdominal Pain
+c86d9699-b4b1-48d3-8ddb-cdf3047f6ad0,Faustino767 Daniel959,Abdominal Pain
+ce393e5a-fa61-49b3-b6b3-ef4385eaa05e,Cristian531 Alarc—n922,Abdominal Pain
+a6b6d532-e0cc-4ed0-a51d-543c49e8a396,Alfredo17 Cab‡n897,Abdominal Pain
+4e1a04d4-eb35-48f8-8d72-18b1f4c86ac1,Carlota980 Salcedo309,Abdominal Pain
+b0bd5ca1-a6ae-4065-b8d5-6fdae66b3706,Terri848 Conn188,Abdominal Pain
+b8857e9b-c89b-485a-bfd3-88ce2a1bed7b,Gracia333 Zulauf375,Shortness of Breath
+3c2680a1-b43c-4235-9847-72fb2b68ae50,Raleigh478 Nolan344,Shortness of Breath
+75c6bad0-78f1-43c2-83b9-3e9695255d80,Samuel331 Luna60,Shortness of Breath
+4336eeba-2805-4a29-89fb-f5a9674d4bdc,Otis335 Schultz619,Shortness of Breath
+b9b941f6-5218-4706-ad0a-f64526791d78,Elena945 Briones478,Shortness of Breath
+cbc1e0a9-caf8-4f0e-8b1f-745041c79b94,Luisa710 Bonilla161,Shortness of Breath
+141fbba7-6e7c-459b-8f46-c169f26815a6,Mateo562 de Anda129,Lower Extremity Injury
+4046d1fb-e427-4a1f-88cd-968a0f553874,Lucas404 Padilla483,Lower Extremity Injury
+b548fb6a-ddcb-46d3-9e53-7e194b67f35a,Miguel çngel46 Pelayo88,Lower Extremity Injury
+8150fdde-ef55-4328-90cc-bfaf970d42d4,Jacobo456 Olivo261,Lower Extremity Injury
+12b551f6-09b4-4a8a-a264-5812ee7104ff,Miles206 White193,Lower Extremity Injury
+ffc9961c-a014-4a9f-bc89-2b922ffe06bf,Julissa825 Carter549,Lower Extremity Injury
+269e13f6-7f5f-44ff-a821-7981939eed52,Gustavo235 Quezada963,Lower Extremity Injury
+patient_id,Name,primary_reason_of_visit
+60d4c002-16ad-4bee-a7b5-6d3c439f24b1,Alan320 Leannon79,Other-Reasons Discuss At visit
+271c936d-bbd4-4bb0-aac9-809a14a05ef6,Alfonso758 Mateo562,Other-Reasons Discuss At visit
+004b807d-8af2-4b56-8476-9883e21ca399,David908 Toledo81,Other-Reasons Discuss At visit
+d6e37e63-7baa-4cb7-9cd9-c80791cb73d9,Mariano761 Alonzo487,Other-Reasons Discuss At visit
+fcb3d4a0-59af-4c3d-8aab-5f5464e32a0b,Marcos263 Medrano332,Other-Reasons Discuss At visit
+b009f9e0-5a4d-4aa4-9c8f-29b4e912aa5c,Margarita164 Vela532,Other-Reasons Discuss At visit

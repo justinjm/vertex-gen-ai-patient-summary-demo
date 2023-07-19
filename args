@@ -1,0 +1,32 @@
+#!/bin/bash
+
+PROJECT_ID=$(gcloud config get-value project)
+PROJECT_NUMBER=$(gcloud projects describe $(gcloud config get-value project) --format='value(projectNumber)')
+REGION="us-central1"
+SVC_ACCOUNT_NAME="patient-summary"
+SVC_ACCOUNT_EMAIL="$SVC_ACCOUNT_NAME@$PROJECT_ID.iam.gserviceaccount.com"
+DOCKER_REPO="patient-summary"
+IMAGE_NAME="patient-summary"
+IMAGE_TAG="latest"
+IMAGE_URI="$REGION-docker.pkg.dev/$PROJECT_ID/$DOCKER_REPO/$IMAGE_NAME:$IMAGE_TAG"
+SERVICE_NAME="patient-summary"
+SECRET_NAME="patient-summary-secrets"
+SOURCE_REPO_NAME="vertex-gen-ai-patient-summary-demo"
+BUILD_TRIGGER_NAME=$SERVICE_NAME
+
+echo "==================== args ====================================================================="
+echo "PROJECT_ID:          " $PROJECT_ID
+echo "PROJECT_NUMBER:      " $PROJECT_NUMBER
+echo "REGION:              " $REGION
+echo "SVC_ACCOUNT_NAME:    " $SVC_ACCOUNT_NAME
+echo "SVC_ACCOUNT_EMAIL:   " $SVC_ACCOUNT_EMAIL
+echo "DOCKER_REPO:         " $DOCKER_REPO
+echo "IMAGE_NAME:          " $IMAGE_NAME
+echo "IMAGE_TAG:           " $IMAGE_TAG
+echo "IMAGE_URI:           " $IMAGE_URI
+echo "SERVICE_NAME:        " $SERVICE_NAME
+echo "SECRET_NAME:         " $SECRET_NAME
+echo "SOURCE_REPO_NAME:    " $SOURCE_REPO_NAME
+echo "BUILD_TRIGGER_NAME:  " $BUILD_TRIGGER_NAME
+
+echo "================================================================================================="
