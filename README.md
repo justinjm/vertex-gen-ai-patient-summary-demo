@@ -132,8 +132,8 @@ Configuring Firebase further is out of scope of this repository, the basic steps
 2. Scroll down to the "Your Apps" section and find the `SDK setup and configuration` section
 3. Replace the `<YOUR-VALUE-HERE>` values below in the `.secrets.R` file in this repository 
 
-[!WARNING]  
-⚠️ DO NOT include the file secrets.R in git, it is ignored by default.
+> [!WARNING]  
+> DO NOT include the file secrets.R in git, it is ignored by default.
 
 ```sh
 FIREBASE_API_KEY="<YOUR-VALUE-HERE>"
