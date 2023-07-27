@@ -130,12 +130,18 @@ Configuring Firebase further is out of scope of this repository, the basic steps
 
 1. In top left of Firebase console, click the gear icon and then "Project Settings"
 2. Scroll down to the "Your Apps" section and find the `SDK setup and configuration` section
-3. Replace the `<YOUR-VALUE-HERE>` values below in the `.secrets.R` file in this repository (note: DO NOT include this in git, it is ignored by default)
-   1. FIREBASE_API_KEY="<YOUR-VALUE-HERE>"
-   2. FIREBASE_PROJECT_ID="<YOUR-VALUE-HERE>"
-   3. FIREBASE_AUTH_DOMAIN="<YOUR-VALUE-HERE>"
-   4. FIREBASE_STORAGE_BUCKET="<YOUR-VALUE-HERE>"
-   5. FIREBASE_APP_ID="<YOUR-VALUE-HERE>"
+3. Replace the `<YOUR-VALUE-HERE>` values below in the `.secrets.R` file in this repository 
+
+[!WARNING]  
+⚠️ DO NOT include the file secrets.R in git, it is ignored by default.
+
+```sh
+FIREBASE_API_KEY="<YOUR-VALUE-HERE>"
+FIREBASE_PROJECT_ID="<YOUR-VALUE-HERE>"
+FIREBASE_AUTH_DOMAIN="<YOUR-VALUE-HERE>"
+FIREBASE_STORAGE_BUCKET="<YOUR-VALUE-HERE>"
+FIREBASE_APP_ID="<YOUR-VALUE-HERE>"
+```
 
 ## Create BigQuery data
 
