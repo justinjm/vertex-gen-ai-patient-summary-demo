@@ -94,7 +94,7 @@ ui <- page_sidebar(
     )
   ),
   add_busy_bar(color ="#4284F4", height = "6px"),
-  title = "Patient Summary Demo",
+  title = "Synthea Patient Summary Demo",
   sidebar = sidebar(
     width = 400,
     accordion(
