@@ -312,7 +312,7 @@ server <- function(input, output, session) {
       projectId = project_id,
       locationId = region,
       prompt = prompt_text,
-      modelId = "text-bison",
+      modelId = "text-bison@001",
       temperature = input$temperature,
       maxOutputTokens = input$max_length,
       topP=input$top_p,
