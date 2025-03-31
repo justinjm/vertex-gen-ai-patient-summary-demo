@@ -17,7 +17,7 @@ RUN apt-get update && apt-get install -y \
 RUN install2.r --error --skipinstalled --ncpus -1 \
     shiny markdown here glue googleAuthR gargle \
     googleCloudStorageR bigrquery DT \
-    shinyjs shinybusy bslib bsicons \
+    shinyjs shinybusy bsicons \
     && rm -rf /tmp/downloaded_packages
 
 ## from GitHub 
@@ -25,7 +25,11 @@ RUN installGithub.r justinjm/googleCloudVertexAIR && \
     installGithub.r JohnCoene/firebase \
     && rm -rf /tmp/downloaded_packages/
 
-# clean up
+## specific version of bslib to prevent breaking ui changes
+RUN R -e "install.packages('devtools', repos='http://cran.rstudio.com/')"
+RUN R -e "devtools::install_version('bslib', version = '0.5.0')"
+
+# clean up one last time
 RUN rm -rf /tmp/downloaded_packages/ /tmp/*.rds
 
 # Copy configuration files into the Docker image
